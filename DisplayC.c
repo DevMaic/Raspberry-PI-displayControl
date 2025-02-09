@@ -24,18 +24,29 @@ static void gpio_irq_handler(uint gpio, uint32_t events) {
   uint32_t currentTime = to_us_since_boot(get_absolute_time());
    
   if(currentTime - lastTime > 300000) {
+    ssd1306_fill(&ssd, false);
+    ssd1306_send_data(&ssd);
+
     if (gpio == 5) {
       gpio_put(11, !gpio_get(11));
       printf("Botão A pressionado\n");
-      ssd1306_draw_string(&ssd, gpio_get(11)?"LED VERDE ON!":"LED VERDE OFF!", 8, 10);
-      ssd1306_send_data(&ssd);
     } else if (gpio == 6) {
       gpio_put(12, !gpio_get(12));
       printf("Botão B pressionado\n");
-      ssd1306_draw_string(&ssd, gpio_get(12)?"LED AZUL ON!":"LED AZUL OFF!", 8, 10);
-      ssd1306_send_data(&ssd);
     }
+
+    ssd1306_draw_string(&ssd, gpio_get(11)?"LED VERDE ON!":"LED VERDE OFF!", 8, 10);
+    ssd1306_draw_string(&ssd, gpio_get(12)?"LED AZUL ON!":"LED AZUL OFF!", 8, 25);
+    ssd1306_send_data(&ssd);
     lastTime = currentTime;
+  }
+
+  // Caso a interrupção seja chamada para atualizar um caracter e não um estado do botão
+    
+  if(gpio == 0) {
+    ssd1306_draw_string(&ssd, "CARACTERE LIDO: ", 8, 40);
+    ssd1306_draw_char(&ssd, c, 105, 40);
+    ssd1306_send_data(&ssd);
   }
 }
 
@@ -63,30 +74,33 @@ void drawOnLedMatrix(int c) {
 }
 
 void drawOnDisplay(int c) {
-  ssd1306_draw_char(&ssd, c, 8, 10);
+  ssd1306_draw_string(&ssd, "Caractere lido: ", 8, 42);
+  ssd1306_draw_char(&ssd, c, 90, 42);
   ssd1306_send_data(&ssd);
 }
 
 
 int main() {
   stdio_init_all(); // Inicializa a comunicação serial
-  gpio_init(5);
+  
+  gpio_init(5); // Inicializa o pino 5 para uso do botão
   gpio_set_dir(5, GPIO_IN);
   gpio_pull_up(5);
 
-  gpio_init(6);
+  gpio_init(6); // Inicializa o pino 6 para uso do botão
   gpio_set_dir(6, GPIO_IN);
   gpio_pull_up(6);
 
-  gpio_init(11);
+  gpio_init(11); // Inicializa o pino 11 para uso do led
   gpio_set_dir(11, GPIO_OUT);
 
-  gpio_init(12);
+  gpio_init(12); // Inicializa o pino 12 para uso do led
   gpio_set_dir(12, GPIO_OUT);
 
   i2c_init(I2C_PORT, 400 * 1000); // I2C Initialisation. Using it at 400Khz.
-  set_sys_clock_khz(128000, false);
+  set_sys_clock_khz(128000, false); // Set the system clock to 128Mhz
 
+  // Configurando a máquina PIO
   pio = pio0;
   uint offset = pio_add_program(pio, &pio_matrix_program);
   sm = pio_claim_unused_sm(pio, true);
@@ -104,32 +118,19 @@ int main() {
   ssd1306_fill(&ssd, false);
   ssd1306_send_data(&ssd);
 
+  // Configura as interrupções  
   gpio_set_irq_enabled_with_callback(5, GPIO_IRQ_EDGE_FALL, 1, &gpio_irq_handler);
   gpio_set_irq_enabled_with_callback(6, GPIO_IRQ_EDGE_FALL, 1, &gpio_irq_handler);
 
-  bool cor = true;
   while(true) {
-    if(stdio_usb_connected()) {
+    if(stdio_usb_connected()) { // Faz a leitura do caractere
       if(scanf(" %c", &c) == 1) {
-        if(c >= '0' && c <= '9') {
+        if(c >= '0' && c <= '9')
           drawOnLedMatrix(c);
-        } else if(c >= 'A' && c <= 'Z') {
-          drawOnDisplay(c);
-        }
+
+        gpio_irq_handler(0, 0);
         printf("Caractere lido: %c\n", c);
-        // ssd1306_draw_char(&ssd, c, 8, 10);
-        // ssd1306_send_data(&ssd);
       }
     }
-    cor = !cor;
-    // Atualiza o conteúdo do display com animações
-    // ssd1306_fill(&ssd, !cor); // Limpa o display
-    // ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
-    // ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 10); // Desenha uma string
-    // ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 30); // Desenha uma string
-    // ssd1306_draw_string(&ssd, "PROF WILTON", 15, 48); // Desenha uma string      
-    // ssd1306_send_data(&ssd); // Atualiza o display
-
-    sleep_ms(1000);
   }
 }
