@@ -23,26 +23,28 @@ char c;
 static void gpio_irq_handler(uint gpio, uint32_t events) {
   uint32_t currentTime = to_us_since_boot(get_absolute_time());
    
-  if(currentTime - lastTime > 300000) {
+  if(currentTime - lastTime > 300000) { // Debounce
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
 
-    if (gpio == 5) {
+    if (gpio == 5) { // Atualiza o estado do led verde
       gpio_put(11, !gpio_get(11));
       printf("Botão A pressionado\n");
-    } else if (gpio == 6) {
+    } else if (gpio == 6) { // Atualiza o estado do ler azul
       gpio_put(12, !gpio_get(12));
       printf("Botão B pressionado\n");
     }
 
+    // Atualiza o estado do display
     ssd1306_draw_string(&ssd, gpio_get(11)?"LED VERDE ON!":"LED VERDE OFF!", 8, 10);
     ssd1306_draw_string(&ssd, gpio_get(12)?"LED AZUL ON!":"LED AZUL OFF!", 8, 25);
+    ssd1306_draw_string(&ssd, "CARACTERE LIDO: ", 8, 40);
+    ssd1306_draw_char(&ssd, c, 105, 40);
     ssd1306_send_data(&ssd);
     lastTime = currentTime;
   }
 
-  // Caso a interrupção seja chamada para atualizar um caracter e não um estado do botão
-    
+  // Esse if evita que o polling seja aplicado ao scanf, dessa forma uma string pode ser lida sem que o polling interfira
   if(gpio == 0) {
     ssd1306_draw_string(&ssd, "CARACTERE LIDO: ", 8, 40);
     ssd1306_draw_char(&ssd, c, 105, 40);
@@ -72,13 +74,6 @@ void desenho_pio(double *desenho, PIO pio, uint sm) {
 void drawOnLedMatrix(int c) {
   desenho_pio(numeros[c-'0'], pio, sm);
 }
-
-void drawOnDisplay(int c) {
-  ssd1306_draw_string(&ssd, "Caractere lido: ", 8, 42);
-  ssd1306_draw_char(&ssd, c, 90, 42);
-  ssd1306_send_data(&ssd);
-}
-
 
 int main() {
   stdio_init_all(); // Inicializa a comunicação serial
